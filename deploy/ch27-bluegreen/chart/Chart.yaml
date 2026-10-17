@@ -1,0 +1,6 @@
+apiVersion: v2
+name: docbot
+description: The doc-bot's serving stack, blue-green edition -- Chroma as a service, the doc-bot as a Deployment whose activeIndex is the cut-over.
+type: application
+version: 0.1.0
+appVersion: "ch27"

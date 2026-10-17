@@ -1,0 +1,37 @@
+[
+  {
+    "id": "eval-0001",
+    "question": "How do I configure Kafka batch consumption in Spring Boot?",
+    "good_answer": "Set spring.kafka.listener.type=batch to enable batch consumption and take a List parameter in the listener method; tune batch size and throughput with max-poll-records.",
+    "bad_answer": "Just configure the Kafka consumer in the config file to get batch consumption.",
+    "expect": "listener.type=batch"
+  },
+  {
+    "id": "eval-0002",
+    "question": "What happens if one message in a batch consumer fails to process, and how do I keep it from taking the whole batch down?",
+    "good_answer": "By default the whole batch is retried, which risks duplicate processing; configure a DefaultErrorHandler with a dead-letter queue to isolate the bad message and avoid dragging down the batch.",
+    "bad_answer": "The message is retried automatically until it succeeds.",
+    "expect": "DefaultErrorHandler"
+  },
+  {
+    "id": "eval-0003",
+    "question": "How do I add rate limiting to a Kafka consumer?",
+    "good_answer": "The docs do not currently cover Kafka consumer rate limiting; ask the platform team (do not invent config keys).",
+    "bad_answer": "Just set spring.kafka.consumer.rate-limit=100 to rate limit.",
+    "expect": null
+  },
+  {
+    "id": "eval-0004",
+    "question": "How do I configure the Redis connection pool?",
+    "good_answer": "Configure it through spring.data.redis.lettuce.pool.*, e.g. max-active (max connections) and max-idle (max idle).",
+    "bad_answer": "Use spring.redis.pool.max-active to configure the pool.",
+    "expect": "lettuce.pool"
+  },
+  {
+    "id": "eval-0005",
+    "question": "My database query is slow, how do I optimize it?",
+    "good_answer": "Add a B+ tree index on frequently queried columns to speed up slow queries significantly, and use EXPLAIN to inspect the execution plan.",
+    "bad_answer": null,
+    "expect": "EXPLAIN"
+  }
+]

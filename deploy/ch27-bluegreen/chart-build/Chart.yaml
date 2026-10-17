@@ -1,0 +1,5 @@
+apiVersion: v2
+name: build-index
+description: One index build, as one Helm release. The release name is the version, so building the same version twice is refused by Helm before the Job even starts.
+type: application
+version: 0.1.0

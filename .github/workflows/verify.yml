@@ -1,0 +1,65 @@
+# Keep the book honest: every sample that can run without a model server must
+# still run, and every worked solution must still prove itself.
+#
+# What this cannot cover, and why that is stated rather than hidden: 47 of the 99
+# files reach for a local model (LM Studio on the reader's machine). Their output
+# is not reproducible by construction -- the book says so in Chapter 10 -- so
+# there is nothing here for CI to assert. verify_samples.py lists every skip with
+# its reason, so the gap is visible in the log instead of being implied by a
+# green check.
+name: verify samples
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  samples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      # 3.11 is the book's floor and the version every printed output was made
+      # on. Not "3.x": NotRequired and PEP 604 unions in the State schemas make
+      # 3.10 a real failure, not a warning.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # requirements.txt is a full freeze (56 pins, transitive deps included),
+      # so this is already reproducible without a container. A Dockerfile here
+      # would only add a second place for the versions to drift out of step with
+      # the ones Chapter 0 tells the reader to install.
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Report the stack the samples will run on
+        run: |
+          python --version
+          python - <<'PY'
+          import importlib.metadata as m
+          for p in ("langgraph", "langchain-core", "langchain", "chromadb", "mcp", "fastapi"):
+              try:
+                  print(f"{p:16} {m.version(p)}")
+              except Exception:
+                  print(f"{p:16} NOT INSTALLED")
+          PY
+
+      - name: Run the listings and the worked solutions
+        run: python tools/verify_samples.py
+
+      # No per-suite steps here any more. Two of them named a file by hand, and
+      # one of those names went stale in a renumbering: CI ran
+      # `pytest code/test_ch31_deep_research.py` against a file that did not
+      # exist, which pytest reports as exit 4 with nothing collected -- and a
+      # step that collects nothing looks exactly like a step that passed.
+      # verify_samples.py now finds every suite in code/ by reading it, runs it
+      # under pytest, and fails on an empty collection. A suite added tomorrow is
+      # covered without editing this file.

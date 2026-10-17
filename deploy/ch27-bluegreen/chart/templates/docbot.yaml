@@ -1,0 +1,54 @@
+# Two serving environments and one Service. The lines that carry the chapter:
+#   two Deployments, docbot-blue and docbot-green -- each a whole environment with
+#     its own ACTIVE_INDEX; the idle one is staged onto a new index and made
+#     Ready while the other still takes every request
+#   the Service's selector, color: <active> -- the cut-over is
+#     `helm upgrade docbot ./chart --set active=green`: one label, all traffic
+#     at once, no pod restarted; rollback is the same word back
+#   startup checks in the app -- a pod whose collection is missing, unfinished, or
+#     the wrong size exits at import and is never Ready, so staging a bad index
+#     fails on the idle colour and the Service never points at it
+{{- range $color := list "blue" "green" }}
+{{- $env := index $.Values $color }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docbot-{{ $color }}
+  labels: { app: docbot, color: {{ $color }} }
+spec:
+  replicas: {{ $env.replicas }}
+  selector:
+    matchLabels: { app: docbot, color: {{ $color }} }
+  template:
+    metadata:
+      labels: { app: docbot, color: {{ $color }} }
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: docbot
+          image: "{{ $.Values.image.repository }}:{{ required "image.tag is required (make sets it to a hash of the app)" $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports: [{ containerPort: 8000 }]
+          env:
+            - { name: ACTIVE_INDEX, value: {{ $env.activeIndex | quote }} }
+          envFrom:
+            - configMapRef: { name: docbot-env }
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8000 }
+            initialDelaySeconds: 2
+            periodSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8000 }
+            periodSeconds: 10
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: docbot
+spec:
+  type: LoadBalancer            # Docker Desktop maps this to localhost:8080
+  selector: { app: docbot, color: {{ .Values.active }} }
+  ports: [{ port: 8080, targetPort: 8000 }]

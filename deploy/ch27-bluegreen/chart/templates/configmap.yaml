@@ -1,0 +1,12 @@
+# What every process in this namespace shares about its surroundings.
+# activeIndex is deliberately NOT here: it lives on the doc-bot's pod template,
+# where changing it is a roll-out and each revision remembers its own value.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docbot-env
+data:
+  CHROMA_HOST: chroma
+  CHROMA_PORT: "8000"
+  LM_BASE: {{ .Values.embedding.lmBase | quote }}
+  EMBED_MODEL: {{ .Values.embedding.model | quote }}

@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docs-v{{ required "version is required" .Values.version }}
+data:
+  docs.json: |-
+{{ required "docs is required (--set-file docs=docs/vN.json)" .Values.docs | indent 4 }}
+---
+# The build Job. It writes collection docs_v<version> and nothing else. It has no
+# RBAC on Deployments: it prints the command that would deploy the collection and
+# exits. A person or a pipeline runs that command.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: build-index-v{{ .Values.version }}
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      enableServiceLinks: false
+      containers:
+        - name: build
+          image: "{{ .Values.image.repository }}:{{ required "image.tag is required" .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "-m", "app.build_index"]
+          env:
+            - { name: INDEX_VERSION, value: {{ .Values.version | quote }} }
+            - { name: DOCS_FILE, value: /docs/docs.json }
+          envFrom:
+            - configMapRef: { name: docbot-env }
+          volumeMounts:
+            - { name: docs, mountPath: /docs, readOnly: true }
+      volumes:
+        - name: docs
+          configMap: { name: docs-v{{ .Values.version }} }

@@ -1,0 +1,55 @@
+# The vector store as a service of its own, with the data on a PersistentVolume.
+# Blue and green are two collections inside this one server.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: chroma-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.chroma.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chroma
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate            # one writer to the volume at a time
+  selector:
+    matchLabels: { app: chroma }
+  template:
+    metadata:
+      labels: { app: chroma }
+    spec:
+      # Kubernetes injects <SERVICE>_PORT=tcp://... into every pod for every Service
+      # in the namespace. A Service named `chroma` therefore hands the Chroma server
+      # CHROMA_PORT=tcp://10.96.x.x:8000 -- inside the CHROMA_* prefix its own config
+      # loader reads -- and it panics at startup. Turn the legacy links off.
+      enableServiceLinks: false
+      containers:
+        - name: chroma
+          image: {{ .Values.chroma.image }}
+          ports: [{ containerPort: 8000 }]
+          env:
+            - { name: IS_PERSISTENT, value: "TRUE" }
+            - { name: PERSIST_DIRECTORY, value: /data }
+            - { name: ANONYMIZED_TELEMETRY, value: "FALSE" }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+          readinessProbe:
+            httpGet: { path: /api/v2/heartbeat, port: 8000 }
+            periodSeconds: 5
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: chroma-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chroma
+spec:
+  selector: { app: chroma }
+  ports: [{ port: 8000, targetPort: 8000 }]

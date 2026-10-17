@@ -1,0 +1,5 @@
+{
+  "kafka": "Kafka batch consumption [v2]: listener.type=batch + max-poll-records tuning + manual ack",
+  "redis": "Redis connection pool [v2]: lettuce.pool.max-active / max-idle explained",
+  "pg": "PostgreSQL [new]: pgvector extension for vector search"
+}

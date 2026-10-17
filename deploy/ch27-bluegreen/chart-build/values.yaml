@@ -1,0 +1,6 @@
+version: ""                   # the index version to build: writes collection docs_v<version>
+docs: ""                      # the source documents, a JSON object {doc_id: text}; pass with --set-file docs=docs/vN.json
+image:
+  repository: docbot-ch27
+  tag: ""
+  pullPolicy: IfNotPresent

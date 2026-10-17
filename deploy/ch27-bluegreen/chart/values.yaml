@@ -1,0 +1,31 @@
+# Everything the deployment decides. Two kinds of value, and the split matters:
+#   active, blue.*, green.*, image.tag -> rendered into the Service's selector and
+#                              the two doc-bot Deployments' pod templates. Each
+#                              Helm revision remembers its own values, so
+#                              helm rollback restores them.
+#   chroma.*, embedding.*   -> shared surroundings, rendered into a ConfigMap.
+#
+# Blue-green: two serving environments, one Service. `active` names the colour
+# the Service sends traffic to -- the cut-over is changing this one word. The
+# other colour is idle: `make stage V=N` gives it an index and pods, and it must
+# be Ready before `make cutover` will point the Service at it.
+active: blue
+blue:
+  activeIndex: docs_v1        # which collection this colour's pods serve
+  replicas: 2
+green:
+  activeIndex: ""             # idle: no index and no pods until a build is staged onto it
+  replicas: 0
+
+image:
+  repository: docbot-ch27
+  tag: ""                     # set by make: a hash of the app's content, never a reused tag
+  pullPolicy: IfNotPresent    # the image is built locally and never pushed
+
+chroma:
+  image: chromadb/chroma:1.5.9
+  storage: 1Gi
+
+embedding:
+  lmBase: http://host.docker.internal:1234/v1     # LM Studio on the laptop, from inside Docker Desktop's cluster
+  model: text-embedding-nomic-embed-text-v1.5

@@ -1,0 +1,4 @@
+{
+  "kafka": "Kafka batch consumption: spring.kafka.listener.type=batch",
+  "redis": "Redis connection pool: configure via spring.data.redis.*"
+}
