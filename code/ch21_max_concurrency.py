@@ -12,7 +12,8 @@ clock. Nothing else.
 
 There is no model here and nothing to install beyond the book's requirements:
 every "call" is an `asyncio.sleep`, so the timings are stable and the whole
-file runs in about two seconds.
+file runs in about two seconds. `timed` is the chapter's own helper, imported
+from ch21_async.py rather than written again.
 
 Run:  python code/ch21_max_concurrency.py
 """
@@ -25,6 +26,8 @@ from typing import Annotated, TypedDict
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
+
+from ch21_async import timed      # `with timed("label") as t:` prints the label and t.seconds
 
 FANOUT = 7          # tasks in the one superstep
 CAP = 4             # max_concurrency for the capped run
@@ -93,23 +96,21 @@ async def one_run(cap: int | None) -> tuple[int, float, int, list[int]]:
     if cap is not None:
         config["max_concurrency"] = cap               # <- the key under test
 
-    t0 = time.perf_counter()
-    out = await graph.ainvoke({"done": [], "saw": []}, config)
-    wall = time.perf_counter() - t0
+    label = f"max_concurrency={cap}" if cap else "max_concurrency unset"
+    print()
+    with timed(label) as run:                     # the chapter's timer, from ch21_async.py
+        out = await graph.ainvoke({"done": [], "saw": []}, config)
 
     history = list(graph.get_state_history(config))
     steps = {s.metadata["step"]: s for s in history if s.metadata}
     fan_step = steps[1]                               # the superstep that holds the fan-out
 
-    label = f"max_concurrency={cap}" if cap else "max_concurrency unset"
-    print(f"\n   {label}")
-    print(f"     tasks in flight at the peak : {gauge.peak}")
-    print(f"     wall clock                  : {wall:4.1f}s   (one task waits {WORK}s)")
+    print(f"     tasks in flight at the peak : {gauge.peak}   (one task waits {WORK}s)")
     print(f"     checkpoints written         : {len(history)}")
     print(f"     tasks in superstep 1        : {len(fan_step.next)}  {fan_step.next[:3]}...")
     print(f"     each task saw len(done)     : {out['saw']}")
     print(f"     task start times            : {[round(s, 1) for s in gauge.starts]}")
-    return gauge.peak, wall, len(history), out["saw"]
+    return gauge.peak, run.seconds, len(history), out["saw"]
 
 
 async def superstep_is_not_split() -> None:
