@@ -1,4 +1,10 @@
+<p align="center">
+  <a href="https://lgisp.ai"><img src="docs/cover.png" alt="LangGraph in Small Pieces: Building AI Agents from Blocks to Production, by Zhao Han" width="300"></a>
+</p>
+
 # LangGraph in Small Pieces — Code
+
+**Read the book free online: [lgisp.ai](https://lgisp.ai)**
 
 Companion code for the book **_LangGraph in Small Pieces: Building AI Agents from
 Blocks to Production_**. One runnable file per chapter, plus worked solutions for
