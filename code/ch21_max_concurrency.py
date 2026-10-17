@@ -58,10 +58,8 @@ class Gauge:
 
 
 def build(gauge: Gauge):
-    """fan -> seven `work` tasks -> join. The shape is Chapter 8's Send fan-out."""
-
-    async def fan(state: State) -> dict:
-        return {}
+    """START -> seven `work` tasks -> END. The shape is Chapter 8's Send fan-out,
+    with nothing on either side of it: the seven tasks are the whole superstep."""
 
     async def work(state: dict) -> dict:
         gauge.enter()
@@ -71,21 +69,14 @@ def build(gauge: Gauge):
         # superstep -- not what the tasks beside it have since produced.
         return {"done": [state["n"]], "saw": [len(state["done"])]}
 
-    async def join(state: State) -> dict:
-        return {}
-
     g = StateGraph(State)
-    g.add_node("fan", fan)
     g.add_node("work", work)
-    g.add_node("join", join)
-    g.add_edge(START, "fan")
     g.add_conditional_edges(
-        "fan",
+        START,
         lambda s: [Send("work", {"n": i, "done": s["done"]}) for i in range(FANOUT)],
         ["work"],
     )
-    g.add_edge("work", "join")
-    g.add_edge("join", END)
+    g.add_edge("work", END)
     return g.compile(checkpointer=InMemorySaver())
 
 
@@ -103,11 +94,11 @@ async def one_run(cap: int | None) -> tuple[int, float, int, list[int]]:
 
     history = list(graph.get_state_history(config))
     steps = {s.metadata["step"]: s for s in history if s.metadata}
-    fan_step = steps[1]                               # the superstep that holds the fan-out
+    fan_step = steps[0]                               # the superstep that holds the fan-out
 
     print(f"     tasks in flight at the peak : {gauge.peak}   (one task waits {WORK}s)")
     print(f"     checkpoints written         : {len(history)}")
-    print(f"     tasks in superstep 1        : {len(fan_step.next)}  {fan_step.next[:3]}...")
+    print(f"     tasks in superstep 0        : {len(fan_step.next)}  {fan_step.next[:3]}...")
     print(f"     each task saw len(done)     : {out['saw']}")
     print(f"     task start times            : {[round(s, 1) for s in gauge.starts]}")
     return gauge.peak, run.seconds, len(history), out["saw"]
@@ -130,7 +121,7 @@ async def superstep_is_not_split() -> None:
     )
     print(
         f"   it did not change the graph: {free_ckpts} checkpoints either way, {FANOUT} tasks in"
-        " superstep 1 either way,"
+        " superstep 0 either way,"
     )
     print("   and every task read the same input state -- len(done) == 0 for all of them.")
     print("   four ran, three waited, and all seven landed together at the end of the step.")
