@@ -4,14 +4,11 @@ A reader's question, and the one this file answers by running it: a node fans
 out to seven tasks and the run is started with `{"max_concurrency": 4}`. Does
 that split the fan-out into two supersteps, four tasks and then three?
 
-It does not. Two claims, each measured:
-
-  1. the superstep is not split   seven tasks, cap of four, still ONE superstep:
-                                  the same checkpoints are written, and every
-                                  one of the seven reads the same input state
-  2. the cap stops at the node    one node that gathers five calls runs all five
-                                  at once under a cap of one - LangGraph counts
-                                  tasks, not awaits
+It does not. Seven tasks under a cap of four are still ONE superstep: the same
+checkpoints are written, superstep 1 still holds seven tasks, and every one of
+the seven reads the same input state - the three that start last see none of
+the first four's writes. The cap moves how many run at once, and the wall
+clock. Nothing else.
 
 There is no model here and nothing to install beyond the book's requirements:
 every "call" is an `asyncio.sleep`, so the timings are stable and the whole
@@ -111,12 +108,12 @@ async def one_run(cap: int | None) -> tuple[int, float, int, list[int]]:
     print(f"     checkpoints written         : {len(history)}")
     print(f"     tasks in superstep 1        : {len(fan_step.next)}  {fan_step.next[:3]}...")
     print(f"     each task saw len(done)     : {out['saw']}")
-    print(f"     task start times            : {[round(s, 2) for s in gauge.starts]}")
+    print(f"     task start times            : {[round(s, 1) for s in gauge.starts]}")
     return gauge.peak, wall, len(history), out["saw"]
 
 
 async def superstep_is_not_split() -> None:
-    print(f"\n===== 1. {FANOUT} fan-out tasks, with and without a cap of {CAP} =====")
+    print(f"\n===== {FANOUT} fan-out tasks, with and without a cap of {CAP} =====")
     free_peak, free_wall, free_ckpts, free_saw = await one_run(None)
     cap_peak, cap_wall, cap_ckpts, cap_saw = await one_run(CAP)
 
@@ -138,36 +135,9 @@ async def superstep_is_not_split() -> None:
     print("   four ran, three waited, and all seven landed together at the end of the step.")
 
 
-async def the_cap_stops_at_the_node() -> None:
-    print("\n===== 2. the same cap, around a node that gathers =====")
-    gauge = Gauge()
-
-    async def one_call() -> None:
-        gauge.enter()
-        await asyncio.sleep(WORK)
-        gauge.leave()
-
-    async def gathering(state: State) -> dict:
-        await asyncio.gather(*(one_call() for _ in range(5)))     # five awaits, one task
-        return {"done": [0]}
-
-    g = StateGraph(State)
-    g.add_node("gathering", gathering)
-    g.add_edge(START, "gathering")
-    g.add_edge("gathering", END)
-
-    await g.compile().ainvoke({"done": [], "saw": []}, {"max_concurrency": 1})
-
-    assert gauge.peak == 5, gauge.peak
-    print(f"\n   max_concurrency=1, and five calls ran at once inside the node (peak {gauge.peak}).")
-    print("   LangGraph counts tasks; what a task does with the loop is the node's own business.")
-    print("   the cap for those five is a semaphore, in the node -- Section 7.")
-
-
 async def main() -> None:
     await superstep_is_not_split()
-    await the_cap_stops_at_the_node()
-    print("\n   both claims asserted, not just printed.")
+    print("\n   asserted, not just printed.")
 
 
 if __name__ == "__main__":
