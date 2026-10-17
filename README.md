@@ -1,5 +1,7 @@
 # LangGraph in Small Pieces — Companion Code
 
+Python 3.11 with LangGraph 1.2.14 / langchain-core 1.6.9.
+
 **Read the book free online: [lgisp.ai](https://lgisp.ai)**
 
 Companion code for the book **_LangGraph in Small Pieces: Building AI Agents from
