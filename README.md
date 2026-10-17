@@ -12,12 +12,14 @@ every end-of-chapter Challenge.
   <a href="https://lgisp.ai"><img src="docs/cover.png" alt="LangGraph in Small Pieces: Building AI Agents from Blocks to Production, by Zhao Han" width="300"></a>
 </p>
 
-Everything runs on your own machine — no API keys, no cloud model bill. Part I
-needs nothing but LangGraph; Parts II–III add a local model served by
-[LM Studio](https://lmstudio.ai) and a local Chroma vector store. Almost all of it
-is fully offline; the exceptions are the few examples that do a *real* web search —
-Chapter 11's Gold challenge and Chapter 14 use DuckDuckGo via the `ddgs` package —
-which need a network connection, but still no API key and no bill.
+Everything runs on your own machine — no cloud model bill, and no API key except
+for one optional section. Part I needs nothing but LangGraph; Parts II–III add a
+local model served by [LM Studio](https://lmstudio.ai) and a local Chroma vector
+store. Almost all of it is fully offline. Two things need a network connection: the
+few examples that do a *real* web search — Chapter 11's Gold challenge and Chapter 14
+use DuckDuckGo via the `ddgs` package, with no API key and no bill — and Chapter 22's
+LangSmith section, which needs a LangSmith account and key (the rest of Chapter 22
+runs without it).
 
 ## Layout
 
@@ -67,6 +69,13 @@ OpenAI-compatible server:
 3. On a memory-constrained machine, don't run several model-backed examples at
    once — LM Studio unloads and reloads models when you switch, which can cancel
    an in-flight request. Run them one at a time.
+
+No GPU, or just prefer a hosted model? `python tools/use_llm.py openai` (or `open`,
+for the book's gpt-oss-20b hosted) rewrites the model lines in every chapter program
+to point there; `python tools/use_llm.py local` puts them back. Add `--diff` to see
+the change first. The embedding model is only needed from Chapter 25 (RAG) on;
+Chapters 10–24 need just the chat model. Appendix *Using Other LLMs* has the details,
+including which examples behave differently on another model.
 
 Because the model is a real one, its exact wording and scores vary run to run and
 across model versions; the *framework* behavior (routes, state, exit codes) is
