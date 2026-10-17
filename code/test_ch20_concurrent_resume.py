@@ -1,4 +1,4 @@
-"""Ch21: one run at a time per thread, on the async server.
+"""Ch20: one run at a time per thread, on the async server.
 
 The regression these pin was real and silent. Before the claim existed, two
 concurrent `POST /run/{id}/resume` on one paused run both returned HTTP 200 and

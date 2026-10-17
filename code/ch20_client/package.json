@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Chapter 21 - client-side readers for the streaming /ask endpoint.",
+  "description": "Chapter 20 - client-side readers for the streaming /ask endpoint.",
   "scripts": {
     "hand": "node stream_handwritten.mjs",
     "fes": "node stream_fetch_event_source.mjs"

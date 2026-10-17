@@ -1,4 +1,4 @@
-// Chapter 21 - reading the streaming /ask endpoint from a client, by hand.
+// Chapter 20 - reading the streaming /ask endpoint from a client, by hand.
 //
 // The browser's built-in EventSource cannot do this: it only does GET, sends no
 // body, and sets no headers - and POST /ask needs all three. So we drive the

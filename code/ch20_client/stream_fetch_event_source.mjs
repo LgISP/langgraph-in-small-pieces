@@ -1,4 +1,4 @@
-// Chapter 21 - the same streaming /ask client, using @microsoft/fetch-event-source.
+// Chapter 20 - the same streaming /ask client, using @microsoft/fetch-event-source.
 //
 // The hand-written reader in stream_handwritten.mjs is worth seeing once. In
 // production you reach for a library that keeps the POST + body + headers (which

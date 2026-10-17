@@ -1,6 +1,6 @@
 """Chapter 24 - Two things the storage layer will not warn you about.
 
-Ch23 reads the tables. This reads what is IN them, and what happens when the
+The first example in this chapter reads the tables. This reads what is IN them, and what happens when the
 graph changes while a thread is parked between two of them. Both halves fail
 silently on the pinned runtime, which is the only reason they are worth a
 chapter's space.
