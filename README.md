@@ -1,14 +1,14 @@
-<p align="center">
-  <a href="https://lgisp.ai"><img src="docs/cover.png" alt="LangGraph in Small Pieces: Building AI Agents from Blocks to Production, by Zhao Han" width="300"></a>
-</p>
-
-# LangGraph in Small Pieces — Code
+# LangGraph in Small Pieces — Companion Code
 
 **Read the book free online: [lgisp.ai](https://lgisp.ai)**
 
 Companion code for the book **_LangGraph in Small Pieces: Building AI Agents from
 Blocks to Production_**. One runnable file per chapter, plus worked solutions for
 every end-of-chapter Challenge.
+
+<p align="center">
+  <a href="https://lgisp.ai"><img src="docs/cover.png" alt="LangGraph in Small Pieces: Building AI Agents from Blocks to Production, by Zhao Han" width="300"></a>
+</p>
 
 Everything runs on your own machine — no API keys, no cloud model bill. Part I
 needs nothing but LangGraph; Parts II–III add a local model served by
