@@ -98,11 +98,6 @@ async def main() -> None:
     assert free_saw == cap_saw == [0] * FANOUT        # nobody saw a neighbour's write
     assert cap_wall > free_wall * 1.5                 # it is paid for in wall clock: two waves
 
-    print("\n   the cap moved the wall clock and nothing else: same checkpoints, same seven")
-    print("   tasks in superstep 0, and every task read the same input state (len(done)=0).")
-    print("   four started at 0.0s and three at 0.4s -- two waves inside one superstep.")
-    print("\n   asserted, not just printed.")
-
 
 if __name__ == "__main__":
     asyncio.run(main())
