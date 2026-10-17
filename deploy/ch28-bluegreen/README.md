@@ -11,7 +11,7 @@ restarted; a rollback is `helm rollback`, the same label back. The application
 never writes any of these values.
 
 ```
-deploy/ch27-bluegreen/
+deploy/ch28-bluegreen/
   app/            the serving process (FastAPI), the index-build Job, an admin CLI
   docs/           v1.json, v2.json -- the two document sets from the chapter
   chart/          the serving stack: Chroma (PVC+Deployment+Service), ConfigMap, doc-bot blue+green Deployments and the Service that picks one
