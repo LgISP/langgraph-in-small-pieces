@@ -83,7 +83,7 @@ async def one_run(cap: int | None) -> tuple[float, int, int, list[int]]:
 
     history = list(graph.get_state_history(config))
     fan_step = next(s for s in history if s.metadata and s.metadata["step"] == 0)
-    print(f"      tasks in superstep 0 : {len(fan_step.next)}   {fan_step.next[:3]}...")
+    print(f"      tasks in superstep 0 : {len(fan_step.next)}   {fan_step.next}")
     print(f"      checkpoints written  : {len(history)}")
     return run.seconds, len(fan_step.next), len(history), out["saw"]
 
