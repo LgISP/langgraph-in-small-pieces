@@ -306,10 +306,6 @@ async def blocking_research(state: State) -> dict:
     return {"notes": []}
 
 
-def sync_research(state: State) -> dict:
-    return {"notes": []}
-
-
 async def a_run_that_must_stop() -> None:
     """Two timeouts: one around the whole run, one around the node."""
     print("\n===== 7. a run that must stop: a timeout around the run, and around a node =====")
@@ -325,11 +321,6 @@ async def a_run_that_must_stop() -> None:
 
 async def node_timeouts() -> None:
     """What a node timeout can cut off: only a node that gives the event loop a chance."""
-    try:
-        build(research=sync_research, timeout=TimeoutPolicy(run_timeout=1))
-    except ValueError as exc:
-        print(f"   {'timeout on a def node':<22} -> {type(exc).__name__} at compile: {str(exc).splitlines()[0]}")
-
     for label, node in (("timeout, node awaits", slow_research),
                         ("timeout, node blocks", blocking_research)):
         g = build(research=node, timeout=TimeoutPolicy(run_timeout=1))
