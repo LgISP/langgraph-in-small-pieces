@@ -1,23 +1,29 @@
 """Chapter 21 - Async at Scale: waiting without paying for it.
 
 The doc-bot's spine from Chapter 20 - search_docs -> generate - with a new
-node, `research`, between them. `research` asks the model three questions
-about the user's question and looks one thing up on the web (a stand-in that
-sleeps), and under async it can wait on all four at once.
+node, `research`, between them. `research` asks the model about the question
+from three angles and looks one thing up on the web (a stand-in that sleeps),
+and under async it can wait on all four at once.
 
-Every section runs this graph through `ainvoke` and measures one thing:
-  1. the cost of waiting    research written three ways: one wait after another,
-                            the web lookup alongside the model, everything at once
-  2. infectious ainvoke     one async node closes `invoke` for the whole graph
-  3. threads                which thread a def node and an async def node run on
-  3b. node timeouts         what a node timeout can cancel, and what it cannot
-  4. four runs              four questions in series, then in parallel
-  5. a semaphore            at most two model calls in flight, four runs at once
-  6. common mistakes        a blocking call, a sync checkpointer, a missing await
+The file runs in the order the chapter does: first the contract the graph
+imposes, then the two situations that make async worth it, then the four
+patterns you reach for inside them, then the mistake that is hardest to find.
 
-Timings are printed as seconds with ratios beside them. The seconds depend on
-your machine and on how many requests your model server runs at once (LM
-Studio: 4 by default); the ratios are what the chapter is about.
+  the contract
+    1. two doors        `invoke` and `ainvoke` on the same graph
+    2. where nodes run  which thread a def node and an async def node get
+  what it is for
+    3. one node, several waits     research written three ways
+    4. one process, many callers   four runs in series, then in parallel
+  the patterns
+    5. a library that blocks       the call goes to a thread
+    6. too many calls in flight    a semaphore around the model call
+    7. a run that must stop        a timeout around the run, and around a node
+    8. state that outlives the run the async saver, and what it holds
+  the gotcha
+    9. a coroutine never awaited   where it surfaces, and where it does not
+
+Seconds are this machine's and this model server's; the shapes are the point.
 
 Run:  python code/ch21_async.py
 """
@@ -58,7 +64,7 @@ DOCS = {
     "mysql": "MySQL Notes: add a B+ tree index on frequently queried columns; use EXPLAIN.",
 }
 
-WAIT_TOO_LONG = 5          # section 3b: longer than the one-second node timeout it is given
+SLOW = 5                   # sections 7 and 8: a wait long enough to cut short
 
 ANGLES = ["what it is", "how to configure it", "the most common mistake"]
 
@@ -142,7 +148,45 @@ graph = build()
 
 
 # ===========================================================================
-# 1. The cost of waiting: research written three ways.
+# 1. Two doors: invoke and ainvoke on the same graph.
+# ===========================================================================
+async def two_doors() -> None:
+    print("\n===== 1. two doors: invoke and ainvoke on the same graph =====")
+    result = await graph.ainvoke({"question": QUESTION})
+    print(f"   ainvoke : notes={len(result['notes'])}  answer starts: {result['answer'][:60]!r}")
+    try:
+        graph.invoke({"question": QUESTION})     # the sync door, on a graph with async nodes
+    except TypeError as exc:
+        lines = str(exc).splitlines()            # two lines: what is wrong, and what to do
+        print("   invoke  : TypeError: " + "\n             ".join(lines))
+    print("   a sync node answers both doors; an async node is reachable through ainvoke only")
+
+
+# ===========================================================================
+# 2. Where nodes run: a def node and an async def node under ainvoke.
+# ===========================================================================
+def reporting_thread(node):
+    """Wrap a node so that it prints the thread it runs on, then runs as before."""
+    name = node.__name__.removesuffix("_node")
+    if inspect.iscoroutinefunction(node):
+        async def wrapped(state: State) -> dict:
+            print(f"   {name:<12} async def  ran on thread: {threading.current_thread().name}")
+            return await node(state)
+    else:
+        def wrapped(state: State) -> dict:
+            print(f"   {name:<12} def        ran on thread: {threading.current_thread().name}")
+            return node(state)
+    return wrapped
+
+
+async def the_threads() -> None:
+    print("\n===== 2. where nodes run: the same graph, each node reporting its thread =====")
+    await build(wrap=reporting_thread).ainvoke({"question": QUESTION})
+    print("   a plain def is pushed to a worker thread so it cannot stall the loop; an async def runs on the loop itself")
+
+
+# ===========================================================================
+# 3. One node, several waits: research written three ways.
 # ===========================================================================
 async def research_in_series(state: State) -> dict:
     """Every wait finishes before the next one starts: the time is the sum."""
@@ -160,7 +204,7 @@ async def research_web_alongside(state: State) -> dict:
 
 
 async def the_cost_of_waiting() -> None:
-    print("\n===== 1. the cost of waiting: research written three ways =====")
+    print("\n===== 3. one node, several waits: research written three ways =====")
     with timed("every wait one after another") as in_series:
         await build(research_in_series).ainvoke({"question": QUESTION})
     with timed("web lookup alongside the model", compare_to=in_series):
@@ -171,83 +215,10 @@ async def the_cost_of_waiting() -> None:
 
 
 # ===========================================================================
-# 2. Infectious ainvoke: one async node closes invoke for the whole graph.
-# ===========================================================================
-async def two_doors() -> None:
-    print("\n===== 2. infectious ainvoke =====")
-    result = await graph.ainvoke({"question": QUESTION})
-    print(f"   ainvoke : notes={len(result['notes'])}  answer starts: {result['answer'][:60]!r}")
-    try:
-        graph.invoke({"question": QUESTION})     # the sync door, on a graph with async nodes
-    except TypeError as exc:
-        lines = str(exc).splitlines()            # two lines: what is wrong, and what to do
-        print("   invoke  : TypeError: " + "\n             ".join(lines))
-    print("   a sync node answers both doors; an async node is reachable through ainvoke only")
-
-
-# ===========================================================================
-# 3. Threads: where a def node and an async def node run under ainvoke.
-# ===========================================================================
-def reporting_thread(node):
-    """Wrap a node so that it prints the thread it runs on, then runs as before."""
-    name = node.__name__.removesuffix("_node")
-    if inspect.iscoroutinefunction(node):
-        async def wrapped(state: State) -> dict:
-            print(f"   {name:<12} async def  ran on thread: {threading.current_thread().name}")
-            return await node(state)
-    else:
-        def wrapped(state: State) -> dict:
-            print(f"   {name:<12} def        ran on thread: {threading.current_thread().name}")
-            return node(state)
-    return wrapped
-
-
-async def the_threads() -> None:
-    print("\n===== 3. threads: the same graph, each node reporting where it ran =====")
-    await build(wrap=reporting_thread).ainvoke({"question": QUESTION})
-    print("   a plain def is pushed to a worker thread so it cannot stall the loop; an async def runs on the loop itself")
-
-
-async def slow_research(state: State) -> dict:
-    """An async research that waits too long: the timeout is meant to cut it off."""
-    await asyncio.sleep(WAIT_TOO_LONG)
-    return {"notes": []}
-
-
-async def blocking_research(state: State) -> dict:
-    """The same wait, taken on the loop's thread instead of behind an await."""
-    time.sleep(WAIT_TOO_LONG)
-    return {"notes": []}
-
-
-def sync_research(state: State) -> dict:
-    return {"notes": []}
-
-
-async def node_timeouts() -> None:
-    """What a node timeout can cut off: only a node that gives the loop a chance."""
-    print("\n===== 3b. node timeouts: only what yields can be cancelled =====")
-    try:
-        build(research=sync_research, timeout=TimeoutPolicy(run_timeout=1))
-    except ValueError as exc:
-        print(f"   {'def node':<22} -> {type(exc).__name__} at compile: {str(exc).splitlines()[0]}")
-
-    for label, node in (("async def that awaits", slow_research),
-                        ("async def that blocks", blocking_research)):
-        g = build(research=node, timeout=TimeoutPolicy(run_timeout=1))
-        try:
-            await g.ainvoke({"question": QUESTION})
-            print(f"   {label:<22} -> no error: the node ran its full {WAIT_TOO_LONG}s and returned")
-        except NodeTimeoutError as exc:
-            print(f"   {label:<22} -> {type(exc).__name__}: {str(exc).splitlines()[0]}")
-    print("   a timeout is a cancellation, and only an await is a place to cancel")
-
-
-# ===========================================================================
-# 4. Four runs: in series, then in parallel.
+# 4. One process, many callers: runs in series, then in parallel.
 # ===========================================================================
 async def across_runs() -> None:
-    print(f"\n===== 4. four runs: {len(QUESTIONS)} questions =====")
+    print(f"\n===== 4. one process, many callers: {len(QUESTIONS)} runs =====")
     with timed("one after another") as in_series:
         for q in QUESTIONS:
             await graph.ainvoke({"question": q})
@@ -257,10 +228,43 @@ async def across_runs() -> None:
 
 
 # ===========================================================================
-# 5. A semaphore: never more than N model calls in flight, across runs.
+# 5. A library that blocks: the call goes to a thread.
+# ===========================================================================
+def legacy_search(question: str) -> str:
+    """A client you may not rewrite: it blocks, the way a sync HTTP library does."""
+    time.sleep(2)
+    return "[tickets] an old issue about batch listeners"
+
+
+async def research_blocking_tool(state: State) -> dict:
+    """The legacy call made straight from an async node: it holds the loop for two seconds."""
+    tickets = legacy_search(state["question"])
+    web = await web_lookup()
+    return {"notes": [tickets, web]}
+
+
+async def research_tool_on_a_thread(state: State) -> dict:
+    """The same call handed to a worker thread: the loop keeps running."""
+    tickets, web = await asyncio.gather(asyncio.to_thread(legacy_search, state["question"]),
+                                        web_lookup())
+    return {"notes": [tickets, web]}
+
+
+async def a_blocking_library() -> None:
+    print(f"\n===== 5. a library that blocks: {len(QUESTIONS)} runs, each calling it =====")
+    with timed("called from the async node"):
+        await asyncio.gather(*(build(research_blocking_tool).ainvoke({"question": q})
+                               for q in QUESTIONS))
+    with timed("handed to asyncio.to_thread"):
+        await asyncio.gather(*(build(research_tool_on_a_thread).ainvoke({"question": q})
+                               for q in QUESTIONS))
+
+
+# ===========================================================================
+# 6. Too many calls in flight: a semaphore around the model call.
 # ===========================================================================
 async def a_ceiling(limit: int = 2) -> None:
-    print(f"\n===== 5. a semaphore: at most {limit} model calls in flight, {len(QUESTIONS)} runs at once =====")
+    print(f"\n===== 6. too many calls in flight: at most {limit}, across {len(QUESTIONS)} runs =====")
     gate = asyncio.Semaphore(limit)
 
     async def guarded(angle: str, question: str, docs: list[str]) -> str:
@@ -286,58 +290,95 @@ async def a_ceiling(limit: int = 2) -> None:
 
 
 # ===========================================================================
-# 6. Common mistakes: three that look fine in the editor.
+# 7. A run that must stop: a timeout around the run, and around one node.
 # ===========================================================================
-async def research_blocking(state: State) -> dict:
-    time.sleep(2)                              # BUG: blocks the loop; nothing else runs meanwhile
+async def slow_research(state: State) -> dict:
+    """An async research that waits too long: the timeout is meant to cut it off."""
+    await asyncio.sleep(SLOW)
     return {"notes": []}
 
 
-async def research_yielding(state: State) -> dict:
-    await asyncio.sleep(2)                     # yields; the loop runs the other runs meanwhile
+async def blocking_research(state: State) -> dict:
+    """The same wait, taken on the loop's thread instead of behind an await."""
+    time.sleep(SLOW)
     return {"notes": []}
 
 
-async def research_forgot_await(state: State) -> dict:
-    notes = [ask(a, state["question"], state["docs"]) for a in ANGLES]   # BUG: no await
-    return {"notes": notes}                    # three unstarted coroutines go into state
+def sync_research(state: State) -> dict:
+    return {"notes": []}
 
 
-async def common_mistakes() -> None:
-    print("\n===== 6. common mistakes =====")
+async def a_run_that_must_stop() -> None:
+    """Two timeouts: one around the whole run, one around the node."""
+    print("\n===== 7. a run that must stop: a timeout around the run, and around a node =====")
+    g = build(research=slow_research)
+    t0 = time.perf_counter()
+    try:
+        await asyncio.wait_for(g.ainvoke({"question": QUESTION}), timeout=1)
+    except TimeoutError:
+        print(f"   {'wait_for the whole run':<22} -> TimeoutError after "
+              f"{time.perf_counter() - t0:.1f}s, cancelled at research's await")
+    await node_timeouts()
 
-    # (a) a blocking call inside an async node stalls every run on the loop
-    with timed("(a) 4 runs, time.sleep(2) in research"):
-        await asyncio.gather(*(build(research_blocking).ainvoke({"question": q}) for q in QUESTIONS))
-    with timed("(a) 4 runs, await asyncio.sleep(2)"):
-        await asyncio.gather(*(build(research_yielding).ainvoke({"question": q}) for q in QUESTIONS))
 
-    # (b) a sync checkpointer behind the async door
+async def node_timeouts() -> None:
+    """What a node timeout can cut off: only a node that gives the loop a chance."""
+    try:
+        build(research=sync_research, timeout=TimeoutPolicy(run_timeout=1))
+    except ValueError as exc:
+        print(f"   {'timeout on a def node':<22} -> {type(exc).__name__} at compile: {str(exc).splitlines()[0]}")
+
+    for label, node in (("timeout, node awaits", slow_research),
+                        ("timeout, node blocks", blocking_research)):
+        g = build(research=node, timeout=TimeoutPolicy(run_timeout=1))
+        try:
+            await g.ainvoke({"question": QUESTION})
+            print(f"   {label:<22} -> no error: the node ran its full {SLOW}s and returned")
+        except NodeTimeoutError as exc:
+            print(f"   {label:<22} -> {type(exc).__name__}: {str(exc).splitlines()[0]}")
+    print("   a timeout is a cancellation, and only an await is a place to cancel")
+
+
+# ===========================================================================
+# 8. State that outlives the run: the saver the async door needs.
+# ===========================================================================
+async def state_that_outlives_the_run() -> None:
+    print("\n===== 8. state that outlives the run =====")
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     g = build(checkpointer=SqliteSaver(conn))
     try:
         await g.ainvoke({"question": QUESTION}, {"configurable": {"thread_id": "t1"}})
     except NotImplementedError as exc:
-        print(f"   (b) SqliteSaver + ainvoke      -> NotImplementedError: {str(exc).splitlines()[0]}")   # the rest is the install hint
+        print(f"   SqliteSaver + ainvoke      -> NotImplementedError: {str(exc).splitlines()[0]}")   # the rest is the install hint
     conn.close()
     g = build(checkpointer=InMemorySaver())      # InMemorySaver serves both doors
     await g.ainvoke({"question": QUESTION}, {"configurable": {"thread_id": "t1"}})
-    print("   (b) InMemorySaver + ainvoke    -> fine; it serves both doors")
-    async with AsyncSqliteSaver.from_conn_string(":memory:") as saver:   # the file-backed fix
+    print("   InMemorySaver + ainvoke    -> fine; it serves both doors, and forgets at exit")
+    async with AsyncSqliteSaver.from_conn_string(":memory:") as saver:   # the one that persists
         g = build(checkpointer=saver)
         await g.ainvoke({"question": QUESTION}, {"configurable": {"thread_id": "t1"}})
         saved = await g.aget_state({"configurable": {"thread_id": "t1"}})
-    print(f"   (b) AsyncSqliteSaver + ainvoke -> fine; checkpoint holds {len(saved.values['notes'])} notes")
+    print(f"   AsyncSqliteSaver + ainvoke -> fine; checkpoint holds {len(saved.values['notes'])} notes")
 
-    # (c) a coroutine you forgot to await never runs, and the error shows up somewhere else
+
+# ===========================================================================
+# 9. The gotcha: a coroutine nobody awaited.
+# ===========================================================================
+async def research_forgot_await(state: State) -> dict:
+    notes = [ask(a, state["question"], state["docs"]) for a in ANGLES]   # BUG: no await
+    return {"notes": notes}                    # three unstarted coroutines go into state
+
+
+async def a_coroutine_never_awaited() -> None:
+    print("\n===== 9. a coroutine nobody awaited =====")
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", RuntimeWarning)
         try:
             await build(research_forgot_await).ainvoke({"question": QUESTION})
         except TypeError as exc:
-            print(f"   (c) research forgot its awaits -> TypeError, raised in generate: {exc}")
+            print(f"   research forgot its awaits -> TypeError, raised in generate: {exc}")
         gc.collect()                           # the dropped coroutines are collected now ...
-        print(f"       ... and only now Python warns: {caught[-1].message}")
+        print(f"   ... and only now Python warns: {caught[-1].message}")
 
 
 # ===========================================================================
@@ -364,13 +405,15 @@ class timed:
 
 
 async def main() -> None:
-    await the_cost_of_waiting()    # 1. how much time waiting costs
-    await two_doors()              # 2. infectious ainvoke
-    await the_threads()            # 3. threads for sync and async nodes
-    await node_timeouts()          # 3b. what a node timeout can cut off
-    await across_runs()            # 4. runs in parallel versus in series
-    await a_ceiling()              # 5. capping model calls with a semaphore
-    await common_mistakes()        # 6. common async mistakes
+    await two_doors()                    # 1. invoke and ainvoke on the same graph
+    await the_threads()                  # 2. which thread each node runs on
+    await the_cost_of_waiting()          # 3. one node, several waits
+    await across_runs()                  # 4. one process, many callers
+    await a_blocking_library()           # 5. a library that blocks
+    await a_ceiling()                    # 6. too many calls in flight
+    await a_run_that_must_stop()         # 7. a run that must stop
+    await state_that_outlives_the_run()  # 8. state that outlives the run
+    await a_coroutine_never_awaited()    # 9. a coroutine nobody awaited
 
 
 if __name__ == "__main__":
