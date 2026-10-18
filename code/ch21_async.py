@@ -10,6 +10,7 @@ Every section runs this graph through `ainvoke` and measures one thing:
                             the web lookup alongside the model, everything at once
   2. infectious ainvoke     one async node closes `invoke` for the whole graph
   3. threads                which thread a def node and an async def node run on
+  3b. node timeouts         what a node timeout can cancel, and what it cannot
   4. four runs              four questions in series, then in parallel
   5. a semaphore            at most two model calls in flight, four runs at once
   6. common mistakes        a blocking call, a sync checkpointer, a missing await
@@ -35,8 +36,11 @@ from typing import NotRequired, TypedDict
 
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.errors import NodeTimeoutError
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import TimeoutPolicy
 
 llm = ChatOpenAI(
     base_url="http://localhost:1234/v1",
@@ -53,6 +57,8 @@ DOCS = {
     "redis": "Redis Guide: use a connection pool; configure max-active and max-idle.",
     "mysql": "MySQL Notes: add a B+ tree index on frequently queried columns; use EXPLAIN.",
 }
+
+WAIT_TOO_LONG = 5          # section 3b: longer than the one-second node timeout it is given
 
 ANGLES = ["what it is", "how to configure it", "the most common mistake"]
 
@@ -119,11 +125,11 @@ async def generate_node(state: State) -> dict:
     return {"answer": reply.content.strip()}
 
 
-def build(research=research_node, checkpointer=None, wrap=lambda node: node):
+def build(research=research_node, checkpointer=None, wrap=lambda node: node, timeout=None):
     """The graph, with `research` swappable: every section swaps in the version it measures."""
     b = StateGraph(State)
     b.add_node("search_docs", wrap(search_docs_node))
-    b.add_node("research", wrap(research))
+    b.add_node("research", wrap(research), timeout=timeout)
     b.add_node("generate", wrap(generate_node))
     b.add_edge(START, "search_docs")
     b.add_edge("search_docs", "research")
@@ -202,6 +208,41 @@ async def the_threads() -> None:
     print("   a plain def is pushed to a worker thread so it cannot stall the loop; an async def runs on the loop itself")
 
 
+async def slow_research(state: State) -> dict:
+    """An async research that waits too long: the timeout is meant to cut it off."""
+    await asyncio.sleep(WAIT_TOO_LONG)
+    return {"notes": []}
+
+
+async def blocking_research(state: State) -> dict:
+    """The same wait, taken on the loop's thread instead of behind an await."""
+    time.sleep(WAIT_TOO_LONG)
+    return {"notes": []}
+
+
+def sync_research(state: State) -> dict:
+    return {"notes": []}
+
+
+async def node_timeouts() -> None:
+    """What a node timeout can cut off: only a node that gives the loop a chance."""
+    print("\n===== 3b. node timeouts: only what yields can be cancelled =====")
+    try:
+        build(research=sync_research, timeout=TimeoutPolicy(run_timeout=1))
+    except ValueError as exc:
+        print(f"   {'def node':<22} -> {type(exc).__name__} at compile: {str(exc).splitlines()[0]}")
+
+    for label, node in (("async def that awaits", slow_research),
+                        ("async def that blocks", blocking_research)):
+        g = build(research=node, timeout=TimeoutPolicy(run_timeout=1))
+        try:
+            await g.ainvoke({"question": QUESTION})
+            print(f"   {label:<22} -> no error: the node ran its full {WAIT_TOO_LONG}s and returned")
+        except NodeTimeoutError as exc:
+            print(f"   {label:<22} -> {type(exc).__name__}: {str(exc).splitlines()[0]}")
+    print("   a timeout is a cancellation, and only an await is a place to cancel")
+
+
 # ===========================================================================
 # 4. Four runs: in series, then in parallel.
 # ===========================================================================
@@ -223,11 +264,14 @@ async def a_ceiling(limit: int = 2) -> None:
     gate = asyncio.Semaphore(limit)
 
     async def guarded(angle: str, question: str, docs: list[str]) -> str:
-        queued = gate.locked()                 # every permit is out: this call is about to wait
+        who = f"question {QUESTIONS.index(question)}, {angle}"
         t0 = time.perf_counter()
-        async with gate:                       # waits here until a permit comes back
-            if queued:
-                print(f"   waited {time.perf_counter() - t0:4.1f}s for the gate: {question[:34]:<34} {angle}")
+        async with gate:                       # takes a permit, or waits here for one
+            waited = time.perf_counter() - t0
+            if waited > 0.01:
+                print(f"   waited {waited:4.1f}s     : {who}")
+            else:
+                print(f"   went straight in : {who}")
             return await ask(angle, question, docs)
 
     async def research_capped(state: State) -> dict:
@@ -239,7 +283,6 @@ async def a_ceiling(limit: int = 2) -> None:
     g = build(research_capped)
     with timed(f"{len(QUESTIONS) * len(ANGLES)} research calls asked to start"):
         await asyncio.gather(*(g.ainvoke({"question": q}) for q in QUESTIONS))
-    print("   the semaphore is the client-side half of a limit the server also has")
 
 
 # ===========================================================================
@@ -275,11 +318,16 @@ async def common_mistakes() -> None:
     try:
         await g.ainvoke({"question": QUESTION}, {"configurable": {"thread_id": "t1"}})
     except NotImplementedError as exc:
-        print(f"   (b) SqliteSaver + ainvoke -> NotImplementedError: {str(exc).splitlines()[0]}")   # the rest is the install hint
+        print(f"   (b) SqliteSaver + ainvoke      -> NotImplementedError: {str(exc).splitlines()[0]}")   # the rest is the install hint
     conn.close()
     g = build(checkpointer=InMemorySaver())      # InMemorySaver serves both doors
     await g.ainvoke({"question": QUESTION}, {"configurable": {"thread_id": "t1"}})
-    print("   (b) InMemorySaver + ainvoke -> fine; a file needs AsyncSqliteSaver")
+    print("   (b) InMemorySaver + ainvoke    -> fine; it serves both doors")
+    async with AsyncSqliteSaver.from_conn_string(":memory:") as saver:   # the file-backed fix
+        g = build(checkpointer=saver)
+        await g.ainvoke({"question": QUESTION}, {"configurable": {"thread_id": "t1"}})
+        saved = await g.aget_state({"configurable": {"thread_id": "t1"}})
+    print(f"   (b) AsyncSqliteSaver + ainvoke -> fine; checkpoint holds {len(saved.values['notes'])} notes")
 
     # (c) a coroutine you forgot to await never runs, and the error shows up somewhere else
     with warnings.catch_warnings(record=True) as caught:
@@ -319,6 +367,7 @@ async def main() -> None:
     await the_cost_of_waiting()    # 1. how much time waiting costs
     await two_doors()              # 2. infectious ainvoke
     await the_threads()            # 3. threads for sync and async nodes
+    await node_timeouts()          # 3b. what a node timeout can cut off
     await across_runs()            # 4. runs in parallel versus in series
     await a_ceiling()              # 5. capping model calls with a semaphore
     await common_mistakes()        # 6. common async mistakes
