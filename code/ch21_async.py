@@ -105,7 +105,7 @@ async def ask(angle: str, question: str, docs: list[str]) -> str:
 async def web_lookup() -> str:
     """A stand-in for a tool that waits on the network: a web search, a database.
 
-    It sleeps on the loop, which is exactly what an `httpx` call does between
+    It sleeps on the event loop, which is exactly what an `httpx` call does between
     sending the request and the first byte of the reply.
     """
     await asyncio.sleep(1.5)
@@ -115,8 +115,8 @@ async def web_lookup() -> str:
 async def research_node(state: State) -> dict:
     """Three model calls and the web lookup, all in flight at once.
 
-    `gather` hands the four coroutines to the loop; each yields at its own
-    `await`, and the loop waits on four sockets instead of one. The two slower
+    `gather` hands the four coroutines to the event loop; each yields at its own
+    `await`, and the event loop waits on four sockets instead of one. The two slower
     ways to write this node are in section 3.
     """
     *notes, web = await asyncio.gather(
@@ -184,7 +184,7 @@ def reporting_thread(node):
 async def the_threads() -> None:
     print("\n===== 2. where nodes run: the same graph, each node reporting its thread =====")
     await build(wrap=reporting_thread).ainvoke({"question": QUESTION})
-    print("   a plain def is pushed to a worker thread so it cannot stall the loop; an async def runs on the loop itself")
+    print("   a plain def is pushed to a worker thread so it cannot stall the event loop; an async def runs on the event loop itself")
 
 
 # ===========================================================================
@@ -213,7 +213,7 @@ async def the_cost_of_waiting() -> None:
         await build(research_web_alongside).ainvoke({"question": QUESTION})
     with timed("everything at once", compare_to=in_series):
         await graph.ainvoke({"question": QUESTION})
-    print("   the first saving is the whole web wait, the loop's; the second is the model server's")
+    print("   the first saving is the whole web wait, the event loop's; the second is the model server's")
 
 
 # ===========================================================================
@@ -239,14 +239,14 @@ def legacy_search(question: str) -> str:
 
 
 async def research_blocking_tool(state: State) -> dict:
-    """The legacy call made straight from an async node: it holds the loop for two seconds."""
+    """The legacy call made straight from an async node: it holds the event loop for two seconds."""
     tickets = legacy_search(state["question"])
     web = await web_lookup()
     return {"notes": [tickets, web]}
 
 
 async def research_tool_on_a_thread(state: State) -> dict:
-    """The same call handed to a worker thread: the loop keeps running."""
+    """The same call handed to a worker thread: the event loop keeps running."""
     tickets, web = await asyncio.gather(asyncio.to_thread(legacy_search, state["question"]),
                                         web_lookup())
     return {"notes": [tickets, web]}
@@ -301,7 +301,7 @@ async def slow_research(state: State) -> dict:
 
 
 async def blocking_research(state: State) -> dict:
-    """The same wait, taken on the loop's thread instead of behind an await."""
+    """The same wait, taken on the event loop's thread instead of behind an await."""
     time.sleep(SLOW)
     return {"notes": []}
 
@@ -324,7 +324,7 @@ async def a_run_that_must_stop() -> None:
 
 
 async def node_timeouts() -> None:
-    """What a node timeout can cut off: only a node that gives the loop a chance."""
+    """What a node timeout can cut off: only a node that gives the event loop a chance."""
     try:
         build(research=sync_research, timeout=TimeoutPolicy(run_timeout=1))
     except ValueError as exc:
