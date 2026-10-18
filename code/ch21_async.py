@@ -272,7 +272,7 @@ async def a_ceiling(limit: int = 2) -> None:
     async def guarded(angle: str, question: str, docs: list[str]) -> str:
         who = f"question {QUESTIONS.index(question)}, {angle}"
         t0 = time.perf_counter()
-        async with gate:                       # takes a permit, or waits here for one
+        async with gate:                       # takes the count, or waits here for it
             waited = time.perf_counter() - t0
             if waited > 0.01:
                 print(f"   waited {waited:4.1f}s     : {who}")
