@@ -119,8 +119,10 @@ async def research_node(state: State) -> dict:
     `await`, and the loop waits on four sockets instead of one. The two slower
     ways to write this node are in section 3.
     """
-    *notes, web = await asyncio.gather(*(ask(a, state["question"], state["docs"]) for a in ANGLES),
-                                       web_lookup())
+    *notes, web = await asyncio.gather(
+        *(ask(a, state["question"], state["docs"]) for a in ANGLES),
+        web_lookup(),
+    )
     return {"notes": [*notes, web]}
 
 
