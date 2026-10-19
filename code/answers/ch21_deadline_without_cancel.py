@@ -118,7 +118,7 @@ async def ask(req: AskRequest):
         GRAPH.ainvoke({"question": req.question, "wait": req.wait}, cfg(req.thread_id))
     )
     IN_FLIGHT[req.thread_id] = task
-    done, pending = await asyncio.wait({task}, timeout=DEADLINE)   # never raises; leaves it running
+    done, pending = await asyncio.wait([task], timeout=DEADLINE)   # never raises; leaves it running
     if task in done:
         IN_FLIGHT.pop(req.thread_id, None)
         return {"status": "done", "answer": task.result()["answer"]}
