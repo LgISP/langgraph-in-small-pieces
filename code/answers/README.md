@@ -78,9 +78,7 @@ still run fully offline.
 | `ch17_timing_middleware.py`       | 17 | 🥈 | `wrap_model_call`/`wrap_tool_call` time every model and tool call |
 | `ch20_durable_restart.py`         | 20 | 🥈 | A run survives a process restart once `InMemorySaver` becomes a `SqliteSaver` on a file; needs `langgraph-checkpoint-sqlite` |
 | `ch20_shared_checkpointer_redis.py` | 20 | 🥇 | Two replicas share one run: separate `InMemorySaver`s 404, a shared Redis saver serves it; needs `langgraph-checkpoint-redis` + a Redis 8/Stack |
-| `ch21_serial_to_concurrent.py`    | 21 | 🥉 | One node, three waits: awaited in turn they add up, handed to `gather` they take the longest; asserted as a ratio |
-| `ch21_unblock_the_tool.py`        | 21 | 🥈 | A blocking legacy tool stalls every run on the loop; `asyncio.to_thread` gives the overlap back, and a `Semaphore` caps calls in flight |
-| `ch21_cancel_and_resume.py`       | 21 | 🥇 | `asyncio.wait_for` cancels a run mid-node; `AsyncSqliteSaver` kept the finished steps, and `ainvoke(None, config)` finishes without repeating them |
+| `ch21_deadline_without_cancel.py` | 21 | 🥈 | A deadline on the request, not on the run: `asyncio.wait` frees the connection with a `202` and lets the graph finish, where `wait_for` would have cancelled it; needs `langgraph-checkpoint-sqlite` |
 | `ch25_prove_semantic_retrieval.py` | 25 | 🥈 | One added document, no rule changes: the question flips from web-fallback to a local hit — and phrasings sharing no content word reach it, while ones with no lexical hook at all fall just short |
 | `ch25_prompt_injection.py`        | 25 | 🥇 | Plant a hostile document, score the injection with a canary, and grade four prompt defenses — the finding is the variance, not the winner |
 | `ch26_structural_retrieval.py`    | 26 | 🥈 | Markdown structural chunks carry a heading path, so retrieval returns a citable source |
