@@ -329,7 +329,6 @@ async def node_timeouts() -> None:
             print(f"   {label:<22} -> no error: the node ran its full {SLOW}s and returned")
         except NodeTimeoutError as exc:
             print(f"   {label:<22} -> {type(exc).__name__}: {str(exc).splitlines()[0]}")
-    print("   a timeout is a cancellation, and only an await is a place to cancel")
 
 
 # ===========================================================================
