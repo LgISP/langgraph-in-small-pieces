@@ -343,9 +343,11 @@ async def state_that_outlives_the_run() -> None:
     except NotImplementedError as exc:
         print(f"   SqliteSaver + ainvoke      -> NotImplementedError: {str(exc).splitlines()[0]}")   # the rest is the install hint
     conn.close()
+
     g = build(checkpointer=InMemorySaver())      # InMemorySaver serves both doors
     await g.ainvoke({"question": QUESTION}, {"configurable": {"thread_id": "t1"}})
     print("   InMemorySaver + ainvoke    -> fine; it serves both doors, and forgets at exit")
+
     async with AsyncSqliteSaver.from_conn_string(":memory:") as saver:   # the one that persists
         g = build(checkpointer=saver)
         await g.ainvoke({"question": QUESTION}, {"configurable": {"thread_id": "t1"}})
