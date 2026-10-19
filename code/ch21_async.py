@@ -24,6 +24,10 @@ patterns you reach for inside them, then the mistake that is hardest to find.
     9. a coroutine never awaited   where it surfaces, and where it does not
 
 Seconds are this machine's and this model server's; the shapes are the point.
+The book's recorded numbers come from a hosted model (`tools/use_llm.py
+openai`), because the ratios this file is about are the far end's to give --
+run it against the local server and the last two sections of the chapter
+explain what you will see instead.
 
 Run:  python code/ch21_async.py
 """
