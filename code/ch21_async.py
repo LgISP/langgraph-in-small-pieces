@@ -312,13 +312,15 @@ async def blocking_research(state: State) -> dict:
 async def a_run_that_must_stop() -> None:
     """Two timeouts: one around the whole run, one around the node."""
     print("\n===== 7. a run that must stop: a timeout around the run, and around a node =====")
-    g = build(research=slow_research)
+    g = build(research=slow_research, checkpointer=InMemorySaver())
+    config = {"configurable": {"thread_id": "t-stop"}}
     t0 = time.perf_counter()
     try:
-        await asyncio.wait_for(g.ainvoke({"question": QUESTION}), timeout=1)
+        await asyncio.wait_for(g.ainvoke({"question": QUESTION}, config), timeout=1)
     except TimeoutError:
+        saved = await g.aget_state(config)         # where the cancel actually left the thread
         print(f"   {'wait_for the whole run':<22} -> TimeoutError after "
-              f"{time.perf_counter() - t0:.1f}s, cancelled at research's await")
+              f"{time.perf_counter() - t0:.1f}s; state has {sorted(saved.values)}, next={saved.next}")
     await node_timeouts()
 
 
