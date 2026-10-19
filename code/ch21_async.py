@@ -58,7 +58,6 @@ llm = ChatOpenAI(
     model="qwen/qwen3.8-27b",
     temperature=0,
     reasoning_effort="none",
-    max_tokens=120,          # short answers: the chapter measures waiting, not writing
     timeout=240,
 )
 
