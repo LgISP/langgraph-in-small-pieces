@@ -31,7 +31,7 @@ checks the local model setup. Neither asserts a version -- read what they print.
 | Default `recursion_limit` | `1000`, "starting in version 1.0.6" (Graph API guide) | `10007`, read from `langgraph._internal._config`, and overridable by the `LANGGRAPH_DEFAULT_RECURSION_LIMIT` environment variable | Ch4 Gotcha |
 | `create_react_agent` | — | Still imports from `langgraph.prebuilt`; calling it warns `LangGraphDeprecatedSinceV10` ("moved to `langchain.agents`"), removal slated for LangGraph 2.0. The book uses `create_agent` | Ch11 Deep Dive |
 | `SummarizationMiddleware` parameters | Many examples online still use `max_tokens_before_summary=` / `messages_to_keep=` | Those spellings raise `DeprecationWarning` and run on a fallback path; the 1.x forms are `trigger=("tokens", N)` and `keep=("messages", N)` | Ch17 |
-| `FastMCP` | Older material imports `mcp.server.fastmcp.FastMCP` | Renamed `MCPServer`, moved to `mcp.server.mcpserver`; the old path raises `ModuleNotFoundError` pointing at a migration guide | Ch22 |
+| `FastMCP` | The SDK's current README (its 2.x line) shows `from mcp.server import MCPServer`; `FastMCP` is gone from it | On the pinned `mcp==1.29.0` the class is still `mcp.server.fastmcp.FastMCP`, and that is what the book imports. On `mcp>=2.0` the same class is `MCPServer` in `mcp.server.mcpserver`, with the same signatures, and the old path raises `ModuleNotFoundError` | Ch23 Deep Dive |
 
 ## Where the book leans on something not promised
 
@@ -41,11 +41,11 @@ depends on them is the reader's risk, and the book says so in place.
 
 | What | Where it lives | Book |
 |---|---|---|
-| `RemainingSteps` is read-only: writing it is ignored and logged | `langgraph.managed` | Ch4 Deep Dive |
-| `default_retry_on`, the predicate `RetryPolicy` uses when `retry_on` is left off | `langgraph._internal._retry` -- nothing public exports it (still there on 1.2.14) | Ch19 |
-| `WRITES_IDX_MAP`: the reserved write channels (`__error__` = -1, `__interrupt__`, …) and their negative indices in the `writes` table | `langgraph.checkpoint.base` | Ch23 |
-| The shape of the two `SqliteSaver` tables (`checkpoints`, `writes`) and the msgpack checkpoint blob | `langgraph.checkpoint.sqlite` | Ch23 |
-| `checkpoint_id` is a UUIDv6, so ids sort as a timeline | `langgraph.checkpoint.base` | Ch23 |
+| `RemainingSteps` is read-only: a node that returns it is ignored, with a debug log line ("wrote to unknown channel remaining_steps, ignoring it") | `langgraph.managed` | Ch4 Deep Dive |
+| `default_retry_on`, the predicate `RetryPolicy` uses when `retry_on` is left off | `langgraph._internal._retry`; it is reachable as `langgraph.types.default_retry_on` only because `types` imports it, and it is in no module's `__all__` (still so on 1.2.14) | Ch19 |
+| `WRITES_IDX_MAP`: the reserved write channels and their negative indices in the `writes` table (`__error__` -1, `__scheduled__` -2, `__interrupt__` -3, `__resume__` -4) | `langgraph.checkpoint.base` | Ch24 |
+| The shape of the two `SqliteSaver` tables (`checkpoints`, `writes`) and the msgpack checkpoint blob | `langgraph.checkpoint.sqlite` | Ch24 |
+| `checkpoint_id` is a UUIDv6, so ids sort as a timeline | `langgraph.checkpoint.base` | Ch24 |
 | `Command(goto=…)` is checked declaratively only when destinations are annotated; a runtime `goto` string is not | `langgraph.types` | Ch8 |
 
 ## Behaviour that depends on the model server, not on LangGraph
@@ -66,13 +66,32 @@ programs and 63 offline ones). Nothing the book shows changed its behaviour. Wha
 
 | What | Where | Effect on the book |
 |---|---|---|
-| A connection failure now surfaces as `OpenAIConnectionError`; on core 1.5 it was the provider's `APIConnectionError` (core 1.6.0, "standard model exception types") | `langchain-core`, `langchain-openai` | Same failure, same ending for a turn; one transcript line in Ch31 shows the old name |
+| A connection failure now surfaces as `OpenAIConnectionError`, a subclass of both OpenAI's `APIConnectionError` and core's new `ModelConnectionError` (core 1.6.0, "standard model exception types") | `langchain-core`, `langchain-openai` | Same failure, same ending for a turn; nothing in the book prints the class name |
 | `interrupt()` takes a `response_schema` (langgraph 1.2.12) | `langgraph.types` | New capability; the book's approvals do not use it yet |
 | `get_state` no longer reports interrupts that have been answered (langgraph 1.2.13), plus several `update_state` / fork fixes | `langgraph` | The book's observations about pending approvals hold; the semantics are cleaner |
 | Subgraphs are detected from bytecode rather than source (langgraph 1.2.12) | `langgraph` | No change seen in the chapters that stream subgraphs |
-| `langchain.mcp` namespace and `MCPAdapter` (langchain 1.4.0) | `langchain` | Ch22 uses `langchain-mcp-adapters`; the first-party entry point is the newer road |
-| `ChatMessageHistory` deprecated (core 1.6.4) | `langchain-core` | Not used; listed in the Class Map as deliberately skipped |
+| `langchain.mcp` namespace and `MCPAdapter` (langchain 1.4.0); importing it needs the separate `fastmcp` package, which is not in the pinned set | `langchain` | Ch23 uses `langchain-mcp-adapters`; the first-party entry point is the newer road |
+| `InMemoryChatMessageHistory` deprecated (core 1.6.4, removal in 2.0; the docs point at short-term memory instead) | `langchain-core` | Not used; listed in the Class Map as deliberately skipped |
 | The default `recursion_limit` is still `10007`; `WRITES_IDX_MAP`, `RemainingSteps` and `default_retry_on` are where the book says | measured | — |
+
+## Re-checked 2026-10-19
+
+Every row above that can be checked without a model was run again on the frozen
+set (Python 3.13 this time; the numbers are the same): the recursion limit and its
+environment variable, the `create_react_agent` warning text ("Deprecated in
+LangGraph V1.0 to be removed in V2.0"), both `SummarizationMiddleware` spellings,
+`WRITES_IDX_MAP`, the two SQLite tables and their msgpack blob, the UUIDv6
+`checkpoint_id`, `interrupt(response_schema=)`, the `Command(goto=)` check with
+and without the annotation, and the ignored write to `RemainingSteps`. Against LM
+Studio 0.4.x with the catalogue Qwen3.8-27B: `json_mode` is refused with
+`'response_format.type' must be 'json_schema' or 'text'`, `function_calling` with
+`Invalid tool_choice type: 'object'`, and `json_schema` with thinking on returns
+`content=''` and no parse, which `reasoning_effort="none"` fixes. Four rows were
+corrected in the process: the `FastMCP` row had described the SDK's 2.x line as if
+it were the pinned 1.29; `default_retry_on` is reachable through `langgraph.types`
+after all, just not exported; `langchain.mcp` needs `fastmcp`; and the chapter
+numbers for MCP and persistence had not followed the renumbering (Ch22 -> Ch23,
+Ch23 -> Ch24).
 
 ## Changes since the freeze
 
