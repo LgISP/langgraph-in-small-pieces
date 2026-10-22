@@ -102,14 +102,30 @@ Ch23 -> Ch24).
 `langgraph` went 1.2.14 -> 1.2.16 and `langgraph-checkpoint` 4.2.0 -> 4.3.0.
 Nothing else in the set moved, and nothing the book shows changed.
 
-Both releases are bug fixes only -- no new API, nothing deprecated. They
-cluster in three places, all of which the book visits:
+Both releases are bug fixes only -- no new API, nothing deprecated. Nineteen
+fixes between them, and the honest count of how many land on a path this book
+walks is four, with one more half-way. The test applied was not "does the book
+mention this area" but "does any chapter or companion program call this API":
 
-| What the releases fixed | Where the book goes near it |
-|---|---|
-| Resume: an invalid resume value no longer takes other tasks down with it; a resumed `Command`'s update is applied once; a subgraph no longer re-runs its finished tasks; an `interrupt_before` breakpoint stops even when a drain was requested first | Ch7's approvals, Ch20's drain |
-| Checkpoints: an `update_state` input's writes land on the checkpoint it updates, `bulk_update_state` gives each update its own task id, a cached node's writes are saved like a node that ran, and an exit-mode run's pending writes are saved once | Ch6, Ch24 |
-| Streaming: `astream_events` no longer drops control and interrupt events on v1/v2; every message written to a messages `DeltaChannel` gets an id | Ch16 |
+| Fix | The API it is about | Used in |
+|---|---|---|
+| A resumed `Command`'s update is applied once; an invalid resume value no longer takes the other tasks down with it (and `ToolNode` handles one properly) | `Command(resume=...)` | Ch7, Ch13, Ch17, Ch20 |
+| An `update_state` input's writes land on the checkpoint it updates | `update_state` | Ch6, Ch18 |
+| A cached node's writes are saved like a node that ran | `CachePolicy` | Ch19's Deep Dive |
+| Four fixes to exit-mode durability: pending writes saved once, delta writes never stored under the null task id, replayed in live order, and an exit run kept out of a branch the thread moved past | `durability="exit"` | Ch6, Ch7, Ch20, Ch21, Ch24 -- though only Ch24 times the modes |
+| A subgraph no longer re-runs its finished tasks on resume | subgraphs plus `interrupt()` | half: Ch9 builds subgraphs and Ch7 interrupts, but no chapter does both at once |
+
+What the other fixes touch, the book does not:
+
+- **`DeltaChannel`** -- six of the nineteen. The book names it once, in the
+  index. It teaches channels through `BinaryOperatorAggregate` reducers.
+- **`astream_events`** -- the v1/v2 control-and-interrupt fix. Neither the
+  chapters nor the companion programs ever call it; Ch16's Deep Dive names it
+  only to say that `graph.stream(stream_mode=...)` is what to build on.
+- **`bulk_update_state`** -- zero uses anywhere.
+- **`interrupt_before` under a requested drain** -- the two halves never meet:
+  `interrupt_before` appears in Ch7 and Ch24, `RunControl` only in Ch20, and
+  Ch20 says in place that its drain snippet is not wired into its servers.
 
 The book does not demonstrate any of the broken behaviours, so no output block
 moved. What was re-run on the new set: the 23 offline chapter programs and both
