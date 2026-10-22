@@ -1,6 +1,6 @@
 # LangGraph in Small Pieces — Companion Code
 
-Python 3.11 with LangGraph 1.2.14 / langchain-core 1.6.9.
+Python 3.11 with LangGraph 1.2.16 / langchain-core 1.6.9.
 
 **Read the book free online: [lgisp.ai](https://lgisp.ai)**
 
@@ -44,7 +44,7 @@ source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Tested on **Python 3.11** with **LangGraph 1.2.14 / langchain-core 1.6.9**. The
+Tested on **Python 3.11** with **LangGraph 1.2.16 / langchain-core 1.6.9**. The
 versions in `requirements.txt` are pinned as a *set* — installing the latest of
 any one package (say `langchain-openai`) can pull an incompatible `langchain-core`,
 so install from the lockfile rather than piecemeal.

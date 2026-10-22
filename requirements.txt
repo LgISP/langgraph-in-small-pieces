@@ -17,8 +17,8 @@ langchain==1.4.4
 langchain-core==1.6.9
 langchain-openai==1.7.0
 langchain-protocol==0.0.18
-langgraph==1.2.14
-langgraph-checkpoint==4.2.0
+langgraph==1.2.16
+langgraph-checkpoint==4.3.0
 langgraph-prebuilt==1.1.0
 langgraph-sdk==0.4.6
 langsmith==0.11.0

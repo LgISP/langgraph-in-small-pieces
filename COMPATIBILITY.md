@@ -12,11 +12,11 @@ edition absorbs it.
 
 ## The frozen set
 
-Measured against `requirements.txt` as frozen on **2026-10-12** (re-frozen from the 2026-10-08 set; see the last section):
+Measured against `requirements.txt` as frozen on **2026-10-22** (re-frozen from the 2026-10-12 set; see the last section):
 
 | Package | Version |
 |---|---|
-| `langgraph` | 1.2.14 |
+| `langgraph` | 1.2.16 |
 | `langchain-core` | 1.6.9 |
 | `langchain` | 1.4.4 |
 | `langchain-openai` | 1.7.0 |
@@ -26,7 +26,7 @@ checks the local model setup. Neither asserts a version -- read what they print.
 
 ## Where the book and the documentation differ
 
-| Where | The documentation says | What 1.2.14 does | Book |
+| Where | The documentation says | What 1.2.16 does | Book |
 |---|---|---|---|
 | Default `recursion_limit` | `1000`, "starting in version 1.0.6" (Graph API guide) | `10007`, read from `langgraph._internal._config`, and overridable by the `LANGGRAPH_DEFAULT_RECURSION_LIMIT` environment variable | Ch4 Gotcha |
 | `create_react_agent` | — | Still imports from `langgraph.prebuilt`; calling it warns `LangGraphDeprecatedSinceV10` ("moved to `langchain.agents`"), removal slated for LangGraph 2.0. The book uses `create_agent` | Ch11 Deep Dive |
@@ -35,14 +35,14 @@ checks the local model setup. Neither asserts a version -- read what they print.
 
 ## Where the book leans on something not promised
 
-These are implementation details of 1.2.14, shown because they explain behaviour
+These are implementation details of 1.2.16, shown because they explain behaviour
 you will otherwise meet as a surprise. None is a public contract. Code that
 depends on them is the reader's risk, and the book says so in place.
 
 | What | Where it lives | Book |
 |---|---|---|
 | `RemainingSteps` is read-only: a node that returns it is ignored, with a debug log line ("wrote to unknown channel remaining_steps, ignoring it") | `langgraph.managed` | Ch4 Deep Dive |
-| `default_retry_on`, the predicate `RetryPolicy` uses when `retry_on` is left off | `langgraph._internal._retry`; it is reachable as `langgraph.types.default_retry_on` only because `types` imports it, and it is in no module's `__all__` (still so on 1.2.14) | Ch19 |
+| `default_retry_on`, the predicate `RetryPolicy` uses when `retry_on` is left off | `langgraph._internal._retry`; it is reachable as `langgraph.types.default_retry_on` only because `types` imports it, and it is in no module's `__all__` (still so on 1.2.16) | Ch19 |
 | `WRITES_IDX_MAP`: the reserved write channels and their negative indices in the `writes` table (`__error__` -1, `__scheduled__` -2, `__interrupt__` -3, `__resume__` -4) | `langgraph.checkpoint.base` | Ch24 |
 | The shape of the two `SqliteSaver` tables (`checkpoints`, `writes`) and the msgpack checkpoint blob | `langgraph.checkpoint.sqlite` | Ch24 |
 | `checkpoint_id` is a UUIDv6, so ids sort as a timeline | `langgraph.checkpoint.base` | Ch24 |
@@ -96,3 +96,27 @@ Ch23 -> Ch24).
 ## Changes since the freeze
 
 *(none yet)*
+
+## The 2026-10-22 re-freeze: what moved between 1.2.14 and 1.2.16
+
+`langgraph` went 1.2.14 -> 1.2.16 and `langgraph-checkpoint` 4.2.0 -> 4.3.0.
+Nothing else in the set moved, and nothing the book shows changed.
+
+Both releases are bug fixes only -- no new API, nothing deprecated. They
+cluster in three places, all of which the book visits:
+
+| What the releases fixed | Where the book goes near it |
+|---|---|
+| Resume: an invalid resume value no longer takes other tasks down with it; a resumed `Command`'s update is applied once; a subgraph no longer re-runs its finished tasks; an `interrupt_before` breakpoint stops even when a drain was requested first | Ch7's approvals, Ch20's drain |
+| Checkpoints: an `update_state` input's writes land on the checkpoint it updates, `bulk_update_state` gives each update its own task id, a cached node's writes are saved like a node that ran, and an exit-mode run's pending writes are saved once | Ch6, Ch24 |
+| Streaming: `astream_events` no longer drops control and interrupt events on v1/v2; every message written to a messages `DeltaChannel` gets an id | Ch16 |
+
+The book does not demonstrate any of the broken behaviours, so no output block
+moved. What was re-run on the new set: the 23 offline chapter programs and both
+pytest suites (0 failures), `ch21_max_concurrency.py` byte-for-byte against its
+recorded block, Ch21's whole program end to end, and the version-bound claims
+the chapters make by name -- the `10007` recursion limit, `create_react_agent`
+still importing, `default_retry_on`'s private home, `astream_events` v2 raising
+no deprecation, a node `RetryPolicy` surfacing a retry as a repeated
+`on_chain_start` rather than an `on_retry`, and `InjectedState`/`InjectedStore`
+importing unwarned. All unchanged.
