@@ -86,12 +86,14 @@ def one_thread(state_schema) -> tuple[int, int, int]:
 
 if __name__ == "__main__":
     print(f"\n===== {TURNS} turns on one thread, nothing deleted =====")
+    print(f"   {'reducer':<14}{'#msg':>6}{'checkpoints':>14}{'writes':>10}{'total':>10}")
+    print(f"   {'-' * 12:<14}{'-' * 4:>6}{'-' * 12:>14}{'-' * 8:>10}{'-' * 8:>10}")
     results = {}
     for label, schema in (("add_messages", Plain), ("DeltaChannel", Delta)):
         kept, ck, wr = one_thread(schema)
         results[label] = (kept, ck + wr)
-        print(f"   {label:14} {kept:3} messages   checkpoints {ck // 1024:6,} KB"
-              f"   writes {wr // 1024:4,} KB   total {(ck + wr) // 1024:6,} KB")
+        print(f"   {label:<14}{kept:>6}{ck // 1024:>11,} KB{wr // 1024:>7,} KB{(ck + wr) // 1024:>7,} KB")
+    print()
 
     a, b = results["add_messages"], results["DeltaChannel"]
     assert a[0] == b[0] == TURNS * 2        # same conversation, both ways
